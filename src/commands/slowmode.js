@@ -1,37 +1,48 @@
-const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
+const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
 
 module.exports = {
-    data: new SlashCommandBuilder()
-        .setName('slowmode')
-        .setDescription('Set slowmode for a channel')
-        .addIntegerOption(option =>
-            option.setName('seconds')
-                .setDescription('Slowmode delay in seconds (0 to disable)')
-                .setMinValue(0)
-                .setMaxValue(21600)
-                .setRequired(true))
-        .addChannelOption(option =>
-            option.setName('channel')
-                .setDescription('The channel (default: current channel)')
-                .setRequired(false))
-        .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels),
+  data: new SlashCommandBuilder()
+    .setName('slowmode')
+    .setDescription('Set slowmode for a channel')
+    .addIntegerOption(option =>
+      option
+        .setName('seconds')
+        .setDescription('Slowmode delay in seconds (0 to disable)')
+        .setRequired(true)
+        .setMinValue(0)
+        .setMaxValue(21600)
+    )
+    .addChannelOption(option =>
+      option
+        .setName('channel')
+        .setDescription('Channel to set slowmode (default: current)')
+        .setRequired(false)
+    )
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels),
 
-    async execute(interaction, client) {
-        const seconds = interaction.options.getInteger('seconds');
-        const channel = interaction.options.getChannel('channel') || interaction.channel;
+  async execute(interaction) {
+    const seconds = interaction.options.getInteger('seconds');
+    const channel = interaction.options.getChannel('channel') || interaction.channel;
 
-        try {
-            await channel.setRateLimitPerUser(seconds);
+    try {
+      await channel.setRateLimitPerUser(seconds, `By ${interaction.user.tag}`);
 
-            if (seconds === 0) {
-                await interaction.reply({ content: `🐇 Slowmode disabled in **${channel.name}**.` });
-            } else {
-                const timeStr = seconds < 60 ? `${seconds}s` : seconds < 3600 ? `${Math.floor(seconds / 60)}m` : `${Math.floor(seconds / 3600)}h`;
-                await interaction.reply({ content: `🐢 Slowmode set to **${timeStr}** in **${channel.name}**.` });
-            }
-        } catch (error) {
-            console.error(error);
-            await interaction.reply({ content: '❌ An error occurred while setting slowmode.', ephemeral: true });
-        }
+      const embed = new EmbedBuilder()
+        .setColor(0x3498db)
+        .setTitle('🐌 Slowmode Updated')
+        .addFields(
+          { name: 'Channel', value: channel.toString(), inline: true },
+          { name: 'Delay', value: seconds === 0 ? 'Disabled' : `${seconds} seconds`, inline: true }
+        )
+        .setTimestamp();
+
+      await interaction.reply({ embeds: [embed] });
+    } catch (error) {
+      console.error('Slowmode error:', error);
+      await interaction.reply({
+        content: '❌ Failed to set slowmode.',
+        ephemeral: true,
+      });
     }
+  },
 };

@@ -1,43 +1,50 @@
-const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
+const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
 
 module.exports = {
-    data: new SlashCommandBuilder()
-        .setName('unban')
-        .setDescription('Unban a user from the server')
-        .addStringOption(option =>
-            option.setName('userid')
-                .setDescription('The ID of the user to unban')
-                .setRequired(true))
-        .addStringOption(option =>
-            option.setName('reason')
-                .setDescription('Reason for unbanning')
-                .setRequired(false))
-        .setDefaultMemberPermissions(PermissionFlagsBits.BanMembers),
+  data: new SlashCommandBuilder()
+    .setName('unban')
+    .setDescription('Unban a user from the server')
+    .addStringOption(option =>
+      option
+        .setName('userid')
+        .setDescription('The ID of the user to unban')
+        .setRequired(true)
+    )
+    .addStringOption(option =>
+      option
+        .setName('reason')
+        .setDescription('Reason for unban')
+        .setRequired(false)
+    )
+    .setDefaultMemberPermissions(PermissionFlagsBits.BanMembers),
 
-    async execute(interaction, client) {
-        const userId = interaction.options.getString('userid');
-        const reason = interaction.options.getString('reason') || 'No reason provided';
+  async execute(interaction) {
+    const userId = interaction.options.getString('userid');
+    const reason = interaction.options.getString('reason') || 'No reason provided';
 
-        try {
-            await interaction.guild.members.unban(userId, reason);
-            
-            // Log to database
-            client.db.logAction('UNBAN', userId, interaction.guild.id, interaction.user.id, reason);
-            
-            // Log to channel
-            await client.logger.log(interaction.guild, 'UNBAN', {
-                userId: userId,
-                modId: interaction.user.id
-            });
+    try {
+      await interaction.guild.members.unban(userId, `${reason} | By ${interaction.user.tag}`);
 
-            await interaction.reply({ content: `✅ User with ID **${userId}** has been unbanned.\n📋 Reason: ${reason}` });
-        } catch (error) {
-            if (error.code === 10026) {
-                await interaction.reply({ content: '❌ This user is not banned!', ephemeral: true });
-            } else {
-                console.error(error);
-                await interaction.reply({ content: '❌ An error occurred while trying to unban this user.', ephemeral: true });
-            }
-        }
+      await interaction.client.db.logAction({
+        guildId: interaction.guild.id,
+        action: 'unban',
+        targetId: userId,
+        targetTag: 'Unknown (unbanned by ID)',
+        moderatorId: interaction.user.id,
+        moderatorTag: interaction.user.tag,
+        reason: reason,
+        timestamp: new Date().toISOString(),
+      });
+
+      await interaction.reply({
+        content: `✅ User with ID **${userId}** has been unbanned.\n📋 **Reason:** ${reason}`,
+      });
+    } catch (error) {
+      console.error('Unban error:', error);
+      await interaction.reply({
+        content: '❌ Failed to unban user. They may not be banned or the ID is invalid.',
+        ephemeral: true,
+      });
     }
+  },
 };

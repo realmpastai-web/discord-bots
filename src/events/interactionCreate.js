@@ -1,23 +1,30 @@
-const { Events, EmbedBuilder } = require('discord.js');
-
 module.exports = {
-  name: Events.InteractionCreate,
+  name: 'interactionCreate',
   async execute(interaction, client) {
     if (!interaction.isChatInputCommand()) return;
 
     const command = client.commands.get(interaction.commandName);
-    if (!command) return;
+
+    if (!command) {
+      console.error(`No command matching ${interaction.commandName} was found.`);
+      return;
+    }
 
     try {
-      await command.execute(interaction, client);
+      await command.execute(interaction);
     } catch (error) {
-      console.error('Command error:', error);
-      const reply = { content: '❌ An error occurred while executing this command.', ephemeral: true };
+      console.error(`Error executing ${interaction.commandName}:`, error);
+      
+      const errorMessage = {
+        content: '❌ There was an error executing this command!',
+        ephemeral: true,
+      };
+
       if (interaction.replied || interaction.deferred) {
-        await interaction.followUp(reply);
+        await interaction.followUp(errorMessage);
       } else {
-        await interaction.reply(reply);
+        await interaction.reply(errorMessage);
       }
     }
-  }
+  },
 };

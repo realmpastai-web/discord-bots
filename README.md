@@ -1,90 +1,179 @@
-# QuantBit Moderation Bot
+# 🛡️ Shield — Discord Moderation Bot
 
-Professional Discord moderation bot with auto-mod, logging, and warning system.
+A professional, production-ready Discord moderation bot with auto-moderation, warning system, and comprehensive logging. Built for server admins who want reliable moderation tools.
 
-## Features
+![Discord.js](https://img.shields.io/badge/discord.js-v14-blue.svg)
+![Node](https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen.svg)
+![License](https://img.shields.io/badge/license-MIT-green.svg)
 
-- 🔨 **Ban/Kick** - Remove problematic users
-- ⏱️ **Timeout** - Temporary mutes
-- ⚠️ **Warning System** - Track user infractions with auto-timeout on threshold
-- 🗑️ **Purge** - Bulk delete messages
-- 🤖 **Auto-Mod** - Spam detection and banned word filtering
-- 📋 **Mod Logs** - All actions logged to configured channel
+## ✨ Features
 
-## Setup
+### 🔨 Punishment Commands
+- `/ban` — Ban users with optional message deletion
+- `/kick` — Remove users from the server
+- `/unban` — Unban users by ID
+- `/timeout` — Temporarily mute users (up to 28 days)
 
-### 1. Create Discord Application
+### ⚠️ Warning System
+- `/warn` — Issue warnings with automatic DMs
+- `/warnings` — View all warnings for a user
+- `/clearwarn` — Clear specific or all warnings
 
-1. Go to [Discord Developer Portal](https://discord.com/developers/applications)
-2. Click "New Application" → Name it "QuantBit Moderator"
-3. Go to "Bot" tab → Click "Add Bot"
-4. Enable intents: **Server Members Intent**, **Message Content Intent**
-5. Copy your **Bot Token** (keep it secret!)
+### 🧹 Message Management
+- `/purge` — Bulk delete messages (1-100)
+- `/slowmode` — Set channel rate limits
 
-### 2. Invite Bot to Server
+### 🤖 Auto-Moderation
+- Block Discord invite links
+- Block external URLs
+- Limit mentions per message
+- Limit emoji usage
+- Automatic violation logging
 
-Go to OAuth2 → URL Generator:
-- Scope: `bot`, `applications.commands`
-- Bot Permissions: `Ban Members`, `Kick Members`, `Moderate Members`, `Manage Messages`, `Send Messages`, `Embed Links`, `Read Message History`
+### 📊 Utilities
+- `/userinfo` — Detailed user information
+- `/modlogs` — View moderation history
+- `/automod` — Configure auto-mod settings
+- `/help` — Command reference
 
-```
-https://discord.com/oauth2/authorize?client_id=YOUR_CLIENT_ID&permissions=274877910032&scope=bot%20applications.commands
-```
+## 🚀 Quick Start
 
-### 3. Configure Environment
+### Prerequisites
+- Node.js 18+ or Docker
+- Discord Bot Token ([Get one here](https://discord.com/developers/applications))
+
+### Option 1: Docker (Recommended)
 
 ```bash
+# Clone the repository
+git clone https://github.com/quantbitrealmSimon/discord-bots.git
+cd discord-bots/moderation-bot
+
+# Create environment file
 cp .env.example .env
-# Edit .env with your values
-```
+# Edit .env and add your Discord token
 
-### 4. Install & Run
-
-```bash
-npm install
-npm start
-```
-
-Or with Docker:
-```bash
+# Start with Docker Compose
 docker-compose up -d
 ```
 
-## Environment Variables
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `DISCORD_TOKEN` | Your bot token | Required |
-| `LOG_CHANNEL_ID` | Channel ID for mod logs | Optional |
-| `WARN_THRESHOLD` | Warnings before auto-timeout | 3 |
-| `SPAM_THRESHOLD` | Messages in spam window to trigger | 5 |
-| `SPAM_WINDOW` | Time window for spam (ms) | 5000 |
-| `BANNED_WORDS` | Comma-separated banned words | None |
-
-## Commands
-
-| Command | Description | Permission |
-|---------|-------------|------------|
-| `/ban @user [reason] [days]` | Ban a user | Ban Members |
-| `/kick @user [reason]` | Kick a user | Kick Members |
-| `/timeout @user <minutes> [reason]` | Timeout a user | Moderate Members |
-| `/warn @user <reason>` | Issue a warning | Moderate Members |
-| `/warnings @user` | View user warnings | Moderate Members |
-| `/clearwarns @user` | Clear all warnings | Moderate Members |
-| `/purge <amount> [@user]` | Delete messages | Manage Messages |
-| `/modsettings` | View bot settings | Moderate Members |
-| `/help` | Show help | Everyone |
-
-## Deploy to Railway
+### Option 2: Node.js
 
 ```bash
-railway login
-railway init
-railway up
+# Clone and enter directory
+git clone https://github.com/quantbitrealmSimon/discord-bots.git
+cd discord-bots/moderation-bot
+
+# Install dependencies
+npm install
+
+# Setup environment
+cp .env.example .env
+# Edit .env and add your Discord token
+
+# Create directories
+mkdir -p data logs
+
+# Start the bot
+npm start
 ```
 
-Set environment variables in Railway dashboard.
+## ⚙️ Configuration
 
-## License
+Create a `.env` file:
 
-MIT © QuantBitRealm
+```env
+DISCORD_TOKEN=your_bot_token_here
+CLIENT_ID=your_application_id_here
+NODE_ENV=production
+```
+
+### Getting Your Credentials
+
+1. Go to [Discord Developer Portal](https://discord.com/developers/applications)
+2. Create New Application → Name it "Shield"
+3. Go to "Bot" section → Add Bot → Copy Token
+4. Go to "General Information" → Copy Application ID
+
+## 🔗 Invite Link Template
+
+Replace `YOUR_CLIENT_ID` with your bot's Application ID:
+
+```
+https://discord.com/api/oauth2/authorize?client_id=YOUR_CLIENT_ID&permissions=1099511627775&scope=bot%20applications.commands
+```
+
+**Required Permissions:**
+- Ban Members
+- Kick Members
+- Moderate Members (timeout)
+- Manage Messages
+- Manage Channels (slowmode)
+- Read Messages / Send Messages
+- Embed Links
+- Read Message History
+
+## 📁 Project Structure
+
+```
+moderation-bot/
+├── src/
+│   ├── commands/          # Slash commands
+│   ├── events/            # Event handlers
+│   ├── services/          # Database & utilities
+│   └── index.js           # Entry point
+├── data/                  # SQLite database
+├── logs/                  # Log files
+├── .env.example
+├── docker-compose.yml
+├── Dockerfile
+└── package.json
+```
+
+## 💰 Pricing
+
+| Tier | Price | Features |
+|------|-------|----------|
+| **Free** | $0 | Basic moderation commands |
+| **Premium** | $10/mo | Advanced auto-mod, custom logs, priority support |
+| **Enterprise** | $50/mo | Multi-server dashboard, API access, white-label |
+
+## 🛠️ Tech Stack
+
+- **Framework:** Discord.js v14
+- **Database:** SQLite3
+- **Logging:** Winston
+- **Deployment:** Docker + Docker Compose
+
+## 📝 Commands Reference
+
+| Command | Permission | Description |
+|---------|-----------|-------------|
+| `/ban` | Ban Members | Ban a user |
+| `/kick` | Kick Members | Kick a user |
+| `/timeout` | Moderate Members | Timeout a user |
+| `/unban` | Ban Members | Unban by ID |
+| `/warn` | Moderate Members | Issue warning |
+| `/warnings` | Moderate Members | View warnings |
+| `/clearwarn` | Moderate Members | Clear warnings |
+| `/purge` | Manage Messages | Delete messages |
+| `/slowmode` | Manage Channels | Set rate limit |
+| `/automod` | Administrator | Configure auto-mod |
+| `/modlogs` | Moderate Members | View action logs |
+| `/userinfo` | Moderate Members | User details |
+| `/help` | Everyone | Show commands |
+
+## 🔒 Security
+
+- All actions logged to database
+- Permission checks on every command
+- Non-root Docker user
+- Input validation and sanitization
+
+## 📄 License
+
+MIT License — see LICENSE file for details.
+
+---
+
+**Built by [QuantBitRealm](https://github.com/quantbitrealmSimon)** 🚀

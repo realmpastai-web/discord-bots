@@ -1,75 +1,93 @@
-const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
+const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('timeout')
-    .setDescription('Timeout a user (mute temporarily)')
+    .setDescription('Timeout a user (temporarily mute)')
     .addUserOption(option =>
-      option.setName('user')
+      option
+        .setName('user')
         .setDescription('The user to timeout')
-        .setRequired(true))
+        .setRequired(true)
+    )
     .addIntegerOption(option =>
-      option.setName('minutes')
+      option
+        .setName('duration')
         .setDescription('Duration in minutes')
         .setRequired(true)
         .setMinValue(1)
-        .setMaxValue(40320)) // Max 28 days
+        .setMaxValue(40320) // 28 days max
+    )
     .addStringOption(option =>
-      option.setName('reason')
-        .setDescription('Reason for the timeout')
-        .setRequired(false))
+      option
+        .setName('reason')
+        .setDescription('Reason for timeout')
+        .setRequired(false)
+    )
     .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers),
 
-  async execute(interaction, client) {
-    const target = interaction.options.getMember('user');
-    const minutes = interaction.options.getInteger('minutes');
+  async execute(interaction) {
+    const user = interaction.options.getUser('user');
+    const duration = interaction.options.getInteger('duration');
     const reason = interaction.options.getString('reason') || 'No reason provided';
 
-    if (!target) {
-      return interaction.reply({ content: '❌ User not found in this server.', ephemeral: true });
+    if (user.id === interaction.user.id) {
+      return interaction.reply({
+        content: '❌ You cannot timeout yourself!',
+        ephemeral: true,
+      });
     }
 
-    if (!target.moderatable) {
-      return interaction.reply({ content: '❌ I cannot timeout this user. They may have higher permissions.', ephemeral: true });
-    }
-
-    if (target.id === interaction.user.id) {
-      return interaction.reply({ content: '❌ You cannot timeout yourself!', ephemeral: true });
+    if (user.id === interaction.client.user.id) {
+      return interaction.reply({
+        content: '❌ You cannot timeout me!',
+        ephemeral: true,
+      });
     }
 
     try {
-      const duration = minutes * 60 * 1000;
-      await target.timeout(duration, `${reason} | By: ${interaction.user.tag}`);
-      
-      await interaction.reply({ 
-        content: `⏱️ **${target.user.tag}** has been timed out for ${minutes} minute(s).\n📌 Reason: ${reason}`, 
-        ephemeral: true 
+      const member = await interaction.guild.members.fetch(user.id);
+
+      if (!member.moderatable) {
+        return interaction.reply({
+          content: '❌ I cannot timeout this user.',
+          ephemeral: true,
+        });
+      }
+
+      const durationMs = duration * 60 * 1000;
+      await member.timeout(durationMs, `${reason} | By ${interaction.user.tag}`);
+
+      await interaction.client.db.logAction({
+        guildId: interaction.guild.id,
+        action: 'timeout',
+        targetId: user.id,
+        targetTag: user.tag,
+        moderatorId: interaction.user.id,
+        moderatorTag: interaction.user.tag,
+        reason: `${reason} (${duration} minutes)`,
+        timestamp: new Date().toISOString(),
       });
-      
-      await logAction(client, interaction.guild, '⏱️ Timeout', target.user, interaction.user, `${reason} (${minutes} min)`);
+
+      const embed = new EmbedBuilder()
+        .setColor(0xff6b6b)
+        .setTitle('🔇 User Timed Out')
+        .addFields(
+          { name: 'User', value: user.tag, inline: true },
+          { name: 'Duration', value: `${duration} minutes`, inline: true },
+          { name: 'Expires', value: `<t:${Math.floor((Date.now() + durationMs) / 1000)}:R>`, inline: true },
+          { name: 'Reason', value: reason },
+          { name: 'Moderator', value: interaction.user.tag }
+        )
+        .setTimestamp();
+
+      await interaction.reply({ embeds: [embed] });
     } catch (error) {
       console.error('Timeout error:', error);
-      await interaction.reply({ content: '❌ Failed to timeout user. Check my permissions.', ephemeral: true });
+      await interaction.reply({
+        content: '❌ Failed to timeout user.',
+        ephemeral: true,
+      });
     }
-  }
+  },
 };
-
-async function logAction(client, guild, action, target, moderator, reason) {
-  if (!client.config.logChannelId) return;
-  
-  const logChannel = guild.channels.cache.get(client.config.logChannelId);
-  if (!logChannel) return;
-
-  const { EmbedBuilder } = require('discord.js');
-  const embed = new EmbedBuilder()
-    .setColor('#ffaa00')
-    .setTitle(action)
-    .addFields(
-      { name: 'User', value: `${target.tag} (${target.id})`, inline: true },
-      { name: 'Moderator', value: `${moderator.tag}`, inline: true },
-      { name: 'Reason', value: reason, inline: false }
-    )
-    .setTimestamp();
-
-  await logChannel.send({ embeds: [embed] });
-}

@@ -1,74 +1,95 @@
-const { EmbedBuilder } = require('discord.js');
-
 module.exports = {
   name: 'messageCreate',
   async execute(message, client) {
-    if (message.author.bot) return;
+    // Ignore bot messages and DMs
+    if (message.author.bot || !message.guild) return;
 
-    // Check for banned words
-    const bannedWords = client.config.bannedWords || [];
-    const content = message.content.toLowerCase();
-    
-    for (const word of bannedWords) {
-      if (word && content.includes(word.toLowerCase())) {
-        try {
-          await message.delete();
-          const warning = await message.channel.send(`⚠️ ${message.author}, your message contained inappropriate language.`);
-          setTimeout(() => warning.delete().catch(() => {}), 5000);
-          
-          await logAutoMod(client, message.guild, '🚫 Banned Word', message.author, `Message deleted: "${message.content.substring(0, 100)}"`);
-          return;
-        } catch (err) {
-          console.error('Auto-mod delete failed:', err);
+    try {
+      // Get auto-mod settings
+      const settings = await client.db.getAutomodSettings(message.guild.id);
+      
+      if (!settings.enabled) return;
+
+      const violations = [];
+
+      // Check for Discord invites
+      if (settings.block_invites) {
+        const inviteRegex = /(discord\.gg\/|discordapp\.com\/invite\/|discord\.com\/invite\/)/i;
+        if (inviteRegex.test(message.content)) {
+          violations.push('Discord invite link');
         }
       }
-    }
 
-    // Spam detection
-    const userId = message.author.id;
-    const now = Date.now();
-    const userData = client.userMessageCounts.get(userId) || { count: 0, timestamp: now };
-
-    if (now - userData.timestamp > client.config.spamWindow) {
-      userData.count = 1;
-      userData.timestamp = now;
-    } else {
-      userData.count++;
-    }
-    client.userMessageCounts.set(userId, userData);
-
-    if (userData.count >= client.config.spamThreshold) {
-      try {
-        const member = await message.guild.members.fetch(userId);
-        if (member.moderatable) {
-          await member.timeout(60000, 'Auto-timeout: Spam detection');
-          const spamWarning = await message.channel.send(`🚫 ${message.author} has been timed out for spamming.`);
-          setTimeout(() => spamWarning.delete().catch(() => {}), 10000);
-          
-          await logAutoMod(client, message.guild, '🤖 Spam Detection', message.author, 'Auto-timeout: 1 minute');
-          client.userMessageCounts.delete(userId);
+      // Check for links
+      if (settings.block_links) {
+        const linkRegex = /(https?:\/\/|www\.)[^\s]+/i;
+        if (linkRegex.test(message.content) && !message.content.includes('discord.gg')) {
+          violations.push('External link');
         }
-      } catch (err) {
-        console.error('Spam timeout failed:', err);
       }
+
+      // Check for excessive mentions
+      if (settings.max_mentions > 0) {
+        const mentionCount = message.mentions.users.size + message.mentions.roles.size;
+        if (mentionCount > settings.max_mentions) {
+          violations.push(`Excessive mentions (${mentionCount}/${settings.max_mentions})`);
+        }
+      }
+
+      // Check for excessive emojis
+      if (settings.max_emojis > 0) {
+        const emojiCount = (message.content.match(/<a?:\w+:\d+>/g) || []).length;
+        if (emojiCount > settings.max_emojis) {
+          violations.push(`Excessive emojis (${emojiCount}/${settings.max_emojis})`);
+        }
+      }
+
+      // Handle violations
+      if (violations.length > 0) {
+        await message.delete().catch(() => {});
+
+        // Send warning to user
+        const warningMsg = await message.channel.send({
+          content: `⚠️ ${message.author}, your message was deleted.\n**Reason:** ${violations.join(', ')}`,
+        });
+
+        // Delete warning after 10 seconds
+        setTimeout(() => warningMsg.delete().catch(() => {}), 10000);
+
+        // Log to database
+        await client.db.logAction({
+          guildId: message.guild.id,
+          action: 'automod',
+          targetId: message.author.id,
+          targetTag: message.author.tag,
+          moderatorId: client.user.id,
+          moderatorTag: client.user.tag,
+          reason: `AutoMod: ${violations.join(', ')}`,
+          timestamp: new Date().toISOString(),
+        });
+
+        // Log to channel if configured
+        if (settings.log_channel_id) {
+          const logChannel = message.guild.channels.cache.get(settings.log_channel_id);
+          if (logChannel) {
+            const { EmbedBuilder } = require('discord.js');
+            const embed = new EmbedBuilder()
+              .setColor(0xff6b6b)
+              .setTitle('🤖 Auto-Moderation Triggered')
+              .addFields(
+                { name: 'User', value: `${message.author.tag} (${message.author.id})`, inline: true },
+                { name: 'Channel', value: message.channel.toString(), inline: true },
+                { name: 'Violations', value: violations.join('\n') },
+                { name: 'Content Preview', value: message.content.slice(0, 500) || '[No content]' }
+              )
+              .setTimestamp();
+            
+            logChannel.send({ embeds: [embed] }).catch(() => {});
+          }
+        }
+      }
+    } catch (error) {
+      console.error('AutoMod error:', error);
     }
-  }
+  },
 };
-
-async function logAutoMod(client, guild, action, user, details) {
-  if (!client.config.logChannelId) return;
-  
-  const logChannel = guild.channels.cache.get(client.config.logChannelId);
-  if (!logChannel) return;
-
-  const embed = new EmbedBuilder()
-    .setColor('#ff6600')
-    .setTitle(action)
-    .addFields(
-      { name: 'User', value: `${user.tag} (${user.id})`, inline: true },
-      { name: 'Details', value: details, inline: false }
-    )
-    .setTimestamp();
-
-  await logChannel.send({ embeds: [embed] });
-}

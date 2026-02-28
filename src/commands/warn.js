@@ -1,72 +1,95 @@
 const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
-const warnings = require('../utils/warnings.js');
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('warn')
     .setDescription('Warn a user')
     .addUserOption(option =>
-      option.setName('user')
+      option
+        .setName('user')
         .setDescription('The user to warn')
-        .setRequired(true))
+        .setRequired(true)
+    )
     .addStringOption(option =>
-      option.setName('reason')
+      option
+        .setName('reason')
         .setDescription('Reason for the warning')
-        .setRequired(true))
+        .setRequired(true)
+    )
     .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers),
 
-  async execute(interaction, client) {
-    const target = interaction.options.getMember('user');
+  async execute(interaction) {
+    const user = interaction.options.getUser('user');
     const reason = interaction.options.getString('reason');
 
-    if (!target) {
-      return interaction.reply({ content: '❌ User not found in this server.', ephemeral: true });
+    if (user.id === interaction.user.id) {
+      return interaction.reply({
+        content: '❌ You cannot warn yourself!',
+        ephemeral: true,
+      });
     }
 
-    if (target.id === interaction.user.id) {
-      return interaction.reply({ content: '❌ You cannot warn yourself!', ephemeral: true });
+    if (user.id === interaction.client.user.id) {
+      return interaction.reply({
+        content: '❌ You cannot warn me!',
+        ephemeral: true,
+      });
     }
 
     try {
-      const warningCount = warnings.add(interaction.guild.id, target.id, reason, interaction.user.id);
-      
-      await interaction.reply({ 
-        content: `⚠️ **${target.user.tag}** has been warned.\n📌 Reason: ${reason}\n📊 Total warnings: ${warningCount}/${client.config.warnThreshold}`, 
-        ephemeral: true 
+      // Add warning to database
+      await interaction.client.db.addWarning({
+        guildId: interaction.guild.id,
+        userId: user.id,
+        userTag: user.tag,
+        moderatorId: interaction.user.id,
+        moderatorTag: interaction.user.tag,
+        reason: reason,
+        timestamp: new Date().toISOString(),
       });
 
-      // Auto-timeout if threshold reached
-      if (warningCount >= client.config.warnThreshold && target.moderatable) {
-        await target.timeout(3600000, `Auto-timeout: Reached ${warningCount} warnings`);
-        await interaction.followUp({ 
-          content: `🚫 **${target.user.tag}** has been automatically timed out for 1 hour due to reaching the warning threshold.`, 
-          ephemeral: true 
+      // Get warning count
+      const warnings = await interaction.client.db.getWarnings(interaction.guild.id, user.id);
+      const warningCount = warnings.length;
+
+      await interaction.client.db.logAction({
+        guildId: interaction.guild.id,
+        action: 'warn',
+        targetId: user.id,
+        targetTag: user.tag,
+        moderatorId: interaction.user.id,
+        moderatorTag: interaction.user.tag,
+        reason: reason,
+        timestamp: new Date().toISOString(),
+      });
+
+      const embed = new EmbedBuilder()
+        .setColor(0xffa500)
+        .setTitle('⚠️ Warning Issued')
+        .addFields(
+          { name: 'User', value: `${user.tag} (${user.id})`, inline: true },
+          { name: 'Moderator', value: interaction.user.tag, inline: true },
+          { name: 'Total Warnings', value: warningCount.toString(), inline: true },
+          { name: 'Reason', value: reason }
+        )
+        .setTimestamp();
+
+      await interaction.reply({ embeds: [embed] });
+
+      // Try to DM the user
+      try {
+        await user.send({
+          content: `⚠️ You have been warned in **${interaction.guild.name}**.\n📋 **Reason:** ${reason}\n📊 **Total warnings:** ${warningCount}`,
         });
+      } catch {
+        // User has DMs disabled
       }
-      
-      await logAction(client, interaction.guild, '⚠️ Warning', target.user, interaction.user, `${reason} (#${warningCount})`);
     } catch (error) {
       console.error('Warn error:', error);
-      await interaction.reply({ content: '❌ Failed to warn user.', ephemeral: true });
+      await interaction.reply({
+        content: '❌ Failed to issue warning.',
+        ephemeral: true,
+      });
     }
-  }
+  },
 };
-
-async function logAction(client, guild, action, target, moderator, reason) {
-  if (!client.config.logChannelId) return;
-  
-  const logChannel = guild.channels.cache.get(client.config.logChannelId);
-  if (!logChannel) return;
-
-  const embed = new EmbedBuilder()
-    .setColor('#ffff00')
-    .setTitle(action)
-    .addFields(
-      { name: 'User', value: `${target.tag} (${target.id})`, inline: true },
-      { name: 'Moderator', value: `${moderator.tag}`, inline: true },
-      { name: 'Reason', value: reason, inline: false }
-    )
-    .setTimestamp();
-
-  await logChannel.send({ embeds: [embed] });
-}

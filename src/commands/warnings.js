@@ -1,37 +1,53 @@
 const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
-const warnings = require('../utils/warnings.js');
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('warnings')
     .setDescription('View warnings for a user')
     .addUserOption(option =>
-      option.setName('user')
-        .setDescription('The user to check warnings for')
-        .setRequired(true))
+      option
+        .setName('user')
+        .setDescription('The user to check')
+        .setRequired(true)
+    )
     .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers),
 
   async execute(interaction) {
-    const target = interaction.options.getUser('user');
-    const userWarnings = warnings.get(interaction.guild.id, target.id);
+    const user = interaction.options.getUser('user');
 
-    if (!userWarnings || userWarnings.length === 0) {
-      return interaction.reply({ content: `✅ **${target.tag}** has no warnings.`, ephemeral: true });
-    }
+    try {
+      const warnings = await interaction.client.db.getWarnings(interaction.guild.id, user.id);
 
-    const embed = new EmbedBuilder()
-      .setColor('#0099ff')
-      .setTitle(`⚠️ Warnings for ${target.tag}`)
-      .setDescription(`Total warnings: ${userWarnings.length}`)
-      .setTimestamp();
+      if (warnings.length === 0) {
+        return interaction.reply({
+          content: `✅ **${user.tag}** has no warnings.`,
+        });
+      }
 
-    userWarnings.slice(0, 10).forEach((warn, index) => {
-      embed.addFields({
-        name: `Warning #${index + 1} - <t:${Math.floor(warn.timestamp / 1000)}:R>`,
-        value: `Reason: ${warn.reason}\nBy: <@${warn.moderatorId}>`
+      const embed = new EmbedBuilder()
+        .setColor(0xffa500)
+        .setTitle(`⚠️ Warnings for ${user.tag}`)
+        .setDescription(`Total warnings: ${warnings.length}`)
+        .setTimestamp();
+
+      warnings.slice(0, 10).forEach((warning, index) => {
+        embed.addFields({
+          name: `Warning #${index + 1} — ${new Date(warning.timestamp).toLocaleDateString()}`,
+          value: `**By:** ${warning.moderatorTag}\n**Reason:** ${warning.reason}`,
+        });
       });
-    });
 
-    await interaction.reply({ embeds: [embed], ephemeral: true });
-  }
+      if (warnings.length > 10) {
+        embed.setFooter({ text: `Showing 10 of ${warnings.length} warnings` });
+      }
+
+      await interaction.reply({ embeds: [embed] });
+    } catch (error) {
+      console.error('Warnings error:', error);
+      await interaction.reply({
+        content: '❌ Failed to fetch warnings.',
+        ephemeral: true,
+      });
+    }
+  },
 };

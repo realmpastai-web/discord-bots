@@ -5,63 +5,62 @@ module.exports = {
     .setName('purge')
     .setDescription('Delete multiple messages')
     .addIntegerOption(option =>
-      option.setName('amount')
+      option
+        .setName('amount')
         .setDescription('Number of messages to delete (1-100)')
         .setRequired(true)
         .setMinValue(1)
-        .setMaxValue(100))
+        .setMaxValue(100)
+    )
     .addUserOption(option =>
-      option.setName('user')
+      option
+        .setName('user')
         .setDescription('Only delete messages from this user')
-        .setRequired(false))
+        .setRequired(false)
+    )
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages),
 
-  async execute(interaction, client) {
+  async execute(interaction) {
     const amount = interaction.options.getInteger('amount');
-    const targetUser = interaction.options.getUser('user');
+    const user = interaction.options.getUser('user');
 
     try {
+      await interaction.deferReply({ ephemeral: true });
+
       const messages = await interaction.channel.messages.fetch({ limit: amount });
       
-      let deletedMessages = messages;
-      if (targetUser) {
-        deletedMessages = messages.filter(msg => msg.author.id === targetUser.id);
+      let filtered = messages;
+      if (user) {
+        filtered = messages.filter(msg => msg.author.id === user.id);
       }
 
-      await interaction.channel.bulkDelete(deletedMessages, true);
-      
-      const count = targetUser 
-        ? deletedMessages.size 
-        : amount;
+      // Filter out messages older than 14 days (Discord limitation)
+      const now = Date.now();
+      const fourteenDays = 14 * 24 * 60 * 60 * 1000;
+      filtered = filtered.filter(msg => now - msg.createdTimestamp < fourteenDays);
 
-      await interaction.reply({ 
-        content: `🗑️ Deleted ${count} message(s)${targetUser ? ` from ${targetUser.tag}` : ''}.`, 
-        ephemeral: true 
+      const deleted = await interaction.channel.bulkDelete(filtered, true);
+
+      await interaction.editReply({
+        content: `✅ Deleted **${deleted.size}** messages.${user ? ` (from ${user.tag})` : ''}`,
       });
 
-      await logAction(client, interaction.guild, interaction.channel, '🗑️ Purge', interaction.user, `${count} messages deleted${targetUser ? ` (by ${targetUser.tag})` : ''}`);
+      // Log the action
+      await interaction.client.db.logAction({
+        guildId: interaction.guild.id,
+        action: 'purge',
+        targetId: user ? user.id : 'multiple',
+        targetTag: user ? user.tag : 'multiple users',
+        moderatorId: interaction.user.id,
+        moderatorTag: interaction.user.tag,
+        reason: `Purged ${deleted.size} messages`,
+        timestamp: new Date().toISOString(),
+      });
     } catch (error) {
       console.error('Purge error:', error);
-      await interaction.reply({ content: '❌ Failed to delete messages. Messages older than 14 days cannot be bulk deleted.', ephemeral: true });
+      await interaction.editReply({
+        content: '❌ Failed to delete messages. Messages older than 14 days cannot be bulk deleted.',
+      });
     }
-  }
+  },
 };
-
-async function logAction(client, guild, channel, action, moderator, details) {
-  if (!client.config.logChannelId) return;
-  
-  const logChannel = guild.channels.cache.get(client.config.logChannelId);
-  if (!logChannel) return;
-
-  const embed = new EmbedBuilder()
-    .setColor('#ff5555')
-    .setTitle(action)
-    .addFields(
-      { name: 'Channel', value: `${channel}`, inline: true },
-      { name: 'Moderator', value: `${moderator.tag}`, inline: true },
-      { name: 'Details', value: details, inline: false }
-    )
-    .setTimestamp();
-
-  await logChannel.send({ embeds: [embed] });
-}

@@ -28,6 +28,7 @@ export class ModerationBot {
     }
 
     async start(): Promise<void> {
+        await this.db.init();
         await this.loadCommands();
         await this.loadEvents();
         
@@ -50,7 +51,7 @@ export class ModerationBot {
             const commandModule = await import(filePath);
             const command: Command = commandModule.default || commandModule;
 
-            if (command.data && command.execute) {
+            if (command?.data?.name) {
                 this.commands.set(command.data.name, command);
                 console.log(`✅ Loaded command: ${command.data.name}`);
             } else {

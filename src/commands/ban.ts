@@ -61,10 +61,11 @@ const command: Command = {
 
             // Check role hierarchy
             if (interaction.member && 'roles' in interaction.member) {
-                const executorHighestRole = interaction.member.roles.highest;
+                const executorMember = await interaction.guild?.members.fetch(interaction.user.id);
+                const executorHighestRole = executorMember?.roles.highest;
                 const targetHighestRole = member.roles.highest;
                 
-                if (targetHighestRole.position >= executorHighestRole.position) {
+                if (targetHighestRole.position >= executorHighestRole!.position) {
                     await interaction.reply({
                         content: '❌ You cannot ban a user with equal or higher role than yours.',
                         ephemeral: true
@@ -95,12 +96,12 @@ const command: Command = {
 
             // Ban the user
             await interaction.guild?.members.ban(targetUser, {
-                deleteMessageDays: deleteDays,
+                deleteMessageSeconds: deleteDays * 86400,
                 reason: `${interaction.user.tag}: ${reason}`
             });
 
             // Log to database
-            bot.db.logAction('ban', targetUser.id, interaction.guildId!, interaction.user.id, reason);
+            await bot.db.logAction('ban', targetUser.id, interaction.guildId!, interaction.user.id, reason);
 
             // Log to mod log channel
             await logToModChannel(bot, interaction, targetUser, reason, 'ban');
@@ -136,7 +137,7 @@ async function logToModChannel(
     reason: string,
     action: string
 ): Promise<void> {
-    const logChannelId = bot.db.getModLogChannel(interaction.guildId!);
+    const logChannelId = await bot.db.getModLogChannel(interaction.guildId!);
     if (!logChannelId) return;
 
     const logChannel = await interaction.guild?.channels.fetch(logChannelId).catch(() => null);

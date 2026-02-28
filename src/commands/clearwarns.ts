@@ -25,7 +25,7 @@ const command: Command = {
         await interaction.deferReply();
 
         try {
-            const warningCount = bot.db.getWarningCount(targetUser.id, interaction.guildId!);
+            const warningCount = await bot.db.getWarningCount(targetUser.id, interaction.guildId!);
 
             if (warningCount === 0) {
                 await interaction.editReply({
@@ -34,9 +34,9 @@ const command: Command = {
                 return;
             }
 
-            const clearedCount = bot.db.clearWarnings(targetUser.id, interaction.guildId!);
+            const clearedCount = await bot.db.clearWarnings(targetUser.id, interaction.guildId!);
 
-            bot.db.logAction('clearwarns', targetUser.id, interaction.guildId!, interaction.user.id, reason);
+            await bot.db.logAction('clearwarns', targetUser.id, interaction.guildId!, interaction.user.id, reason);
 
             await logToModChannel(bot, interaction, targetUser, reason, clearedCount);
 
@@ -70,7 +70,7 @@ async function logToModChannel(
     reason: string,
     count: number
 ): Promise<void> {
-    const logChannelId = bot.db.getModLogChannel(interaction.guildId!);
+    const logChannelId = await bot.db.getModLogChannel(interaction.guildId!);
     if (!logChannelId) return;
 
     const logChannel = await interaction.guild?.channels.fetch(logChannelId).catch(() => null);

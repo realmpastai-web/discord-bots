@@ -117,14 +117,14 @@ export class AutoModService {
 
             // Warn the user
             if (message.guild) {
-                this.bot.db.addWarning(
+                await this.bot.db.addWarning(
                     message.author.id,
                     message.guild.id,
                     this.bot.client.user!.id,
                     `AutoMod: ${reason}`
                 );
 
-                this.bot.db.logAction(
+                await this.bot.db.logAction(
                     'automod',
                     message.author.id,
                     message.guild.id,
@@ -157,7 +157,7 @@ export class AutoModService {
     private async logViolation(message: Message, violationType: string, reason: string): Promise<void> {
         if (!message.guild) return;
 
-        const logChannelId = this.bot.db.getModLogChannel(message.guild.id);
+        const logChannelId = await this.bot.db.getModLogChannel(message.guild.id);
         if (!logChannelId) return;
 
         const logChannel = await message.guild.channels.fetch(logChannelId).catch(() => null);

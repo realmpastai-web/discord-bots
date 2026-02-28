@@ -41,7 +41,7 @@ const command: Command = {
                     break;
             }
 
-            const stats = bot.db.getModStats(interaction.guildId!, since);
+            const stats = await bot.db.getModStats(interaction.guildId!, since);
 
             const periodLabel = {
                 'all': 'All Time',

@@ -56,17 +56,17 @@ const command: Command = {
             return;
         }
 
-        if (interaction.member && 'roles' in interaction.member) {
-            const executorHighestRole = interaction.member.roles.highest;
-            const targetHighestRole = member.roles.highest;
-            
-            if (targetHighestRole.position >= executorHighestRole.position) {
-                await interaction.reply({
-                    content: '❌ You cannot kick a user with equal or higher role than yours.',
-                    ephemeral: true
-                });
-                return;
-            }
+        // Check role hierarchy
+        const executorMember = await interaction.guild?.members.fetch(interaction.user.id);
+        const executorHighestRole = executorMember?.roles.highest;
+        const targetHighestRole = member.roles.highest;
+        
+        if (targetHighestRole.position >= executorHighestRole!.position) {
+            await interaction.reply({
+                content: '❌ You cannot kick a user with equal or higher role than yours.',
+                ephemeral: true
+            });
+            return;
         }
 
         await interaction.deferReply();
@@ -89,7 +89,7 @@ const command: Command = {
 
             await member.kick(`${interaction.user.tag}: ${reason}`);
 
-            bot.db.logAction('kick', targetUser.id, interaction.guildId!, interaction.user.id, reason);
+            await bot.db.logAction('kick', targetUser.id, interaction.guildId!, interaction.user.id, reason);
 
             await logToModChannel(bot, interaction, targetUser, reason, 'kick');
 
@@ -122,7 +122,7 @@ async function logToModChannel(
     reason: string,
     action: string
 ): Promise<void> {
-    const logChannelId = bot.db.getModLogChannel(interaction.guildId!);
+    const logChannelId = await bot.db.getModLogChannel(interaction.guildId!);
     if (!logChannelId) return;
 
     const logChannel = await interaction.guild?.channels.fetch(logChannelId).catch(() => null);

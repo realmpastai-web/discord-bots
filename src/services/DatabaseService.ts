@@ -1,4 +1,5 @@
-import Database from 'better-sqlite3';
+import sqlite3 from 'sqlite3';
+import { open, Database, Statement } from 'sqlite';
 import * as fs from 'fs';
 import * as path from 'path';
 import { config } from '../config';
@@ -20,21 +21,26 @@ export interface ModStats {
 }
 
 export class DatabaseService {
-    private db: Database.Database;
+    private db!: Database<sqlite3.Database, sqlite3.Statement>;
 
-    constructor() {
+    async init(): Promise<void> {
         const dataDir = path.dirname(config.database.path);
         if (!fs.existsSync(dataDir)) {
             fs.mkdirSync(dataDir, { recursive: true });
         }
 
-        this.db = new Database(config.database.path);
-        this.init();
+        this.db = await open({
+            filename: config.database.path,
+            driver: sqlite3.Database
+        });
+
+        await this.createTables();
+        console.log('✅ Database initialized');
     }
 
-    private init(): void {
+    private async createTables(): Promise<void> {
         // Warnings table
-        this.db.exec(`
+        await this.db.exec(`
             CREATE TABLE IF NOT EXISTS warnings (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id TEXT NOT NULL,
@@ -46,7 +52,7 @@ export class DatabaseService {
         `);
 
         // Moderation actions log
-        this.db.exec(`
+        await this.db.exec(`
             CREATE TABLE IF NOT EXISTS mod_actions (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 action_type TEXT NOT NULL,
@@ -60,7 +66,7 @@ export class DatabaseService {
         `);
 
         // Guild settings
-        this.db.exec(`
+        await this.db.exec(`
             CREATE TABLE IF NOT EXISTS guild_settings (
                 guild_id TEXT PRIMARY KEY,
                 mod_log_channel TEXT,
@@ -71,59 +77,57 @@ export class DatabaseService {
                 updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
             )
         `);
-
-        console.log('✅ Database initialized');
     }
 
     // Warning methods
-    addWarning(userId: string, guildId: string, moderatorId: string, reason?: string): number {
-        const stmt = this.db.prepare(
-            'INSERT INTO warnings (user_id, guild_id, moderator_id, reason) VALUES (?, ?, ?, ?)'
+    async addWarning(userId: string, guildId: string, moderatorId: string, reason?: string): Promise<number> {
+        const result = await this.db.run(
+            'INSERT INTO warnings (user_id, guild_id, moderator_id, reason) VALUES (?, ?, ?, ?)',
+            userId, guildId, moderatorId, reason || null
         );
-        const result = stmt.run(userId, guildId, moderatorId, reason || null);
-        return result.lastInsertRowid as number;
+        return result.lastID as number;
     }
 
-    getWarnings(userId: string, guildId: string): Warning[] {
-        const stmt = this.db.prepare(
-            'SELECT * FROM warnings WHERE user_id = ? AND guild_id = ? ORDER BY created_at DESC'
-        );
-        const rows = stmt.all(userId, guildId) as any[];
+    async getWarnings(userId: string, guildId: string): Promise<Warning[]> {
+        const rows = await this.db.all(
+            'SELECT * FROM warnings WHERE user_id = ? AND guild_id = ? ORDER BY created_at DESC',
+            userId, guildId
+        ) as any[];
         return rows.map(this.mapWarning);
     }
 
-    clearWarnings(userId: string, guildId: string): number {
-        const stmt = this.db.prepare(
-            'DELETE FROM warnings WHERE user_id = ? AND guild_id = ?'
+    async clearWarnings(userId: string, guildId: string): Promise<number> {
+        const result = await this.db.run(
+            'DELETE FROM warnings WHERE user_id = ? AND guild_id = ?',
+            userId, guildId
         );
-        const result = stmt.run(userId, guildId);
-        return result.changes;
+        return result.changes || 0;
     }
 
-    getWarningCount(userId: string, guildId: string): number {
-        const stmt = this.db.prepare(
-            'SELECT COUNT(*) as count FROM warnings WHERE user_id = ? AND guild_id = ?'
-        );
-        const result = stmt.get(userId, guildId) as { count: number };
+    async getWarningCount(userId: string, guildId: string): Promise<number> {
+        const result = await this.db.get(
+            'SELECT COUNT(*) as count FROM warnings WHERE user_id = ? AND guild_id = ?',
+            userId, guildId
+        ) as { count: number };
         return result.count;
     }
 
     // Mod actions logging
-    logAction(
+    async logAction(
         actionType: string,
         userId: string,
         guildId: string,
         moderatorId: string,
         reason?: string,
         duration?: string
-    ): void {
-        const stmt = this.db.prepare(
-            'INSERT INTO mod_actions (action_type, user_id, guild_id, moderator_id, reason, duration) VALUES (?, ?, ?, ?, ?, ?)'
+    ): Promise<void> {
+        await this.db.run(
+            'INSERT INTO mod_actions (action_type, user_id, guild_id, moderator_id, reason, duration) VALUES (?, ?, ?, ?, ?, ?)',
+            actionType, userId, guildId, moderatorId, reason || null, duration || null
         );
-        stmt.run(actionType, userId, guildId, moderatorId, reason || null, duration || null);
     }
 
-    getModStats(guildId: string, since?: Date): ModStats {
+    async getModStats(guildId: string, since?: Date): Promise<ModStats> {
         let dateFilter = '';
         const params: any[] = [guildId];
 
@@ -132,7 +136,7 @@ export class DatabaseService {
             params.push(since.toISOString());
         }
 
-        const stmt = this.db.prepare(`
+        const result = await this.db.get(`
             SELECT 
                 SUM(CASE WHEN action_type = 'ban' THEN 1 ELSE 0 END) as bans,
                 SUM(CASE WHEN action_type = 'kick' THEN 1 ELSE 0 END) as kicks,
@@ -140,9 +144,8 @@ export class DatabaseService {
                 SUM(CASE WHEN action_type = 'warn' THEN 1 ELSE 0 END) as warnings
             FROM mod_actions 
             WHERE guild_id = ? ${dateFilter}
-        `);
+        `, ...params) as any;
 
-        const result = stmt.get(...params) as any;
         return {
             bans: result.bans || 0,
             kicks: result.kicks || 0,
@@ -152,24 +155,22 @@ export class DatabaseService {
     }
 
     // Guild settings
-    getGuildSettings(guildId: string): any {
-        const stmt = this.db.prepare('SELECT * FROM guild_settings WHERE guild_id = ?');
-        return stmt.get(guildId);
+    async getGuildSettings(guildId: string): Promise<any> {
+        return await this.db.get('SELECT * FROM guild_settings WHERE guild_id = ?', guildId);
     }
 
-    setModLogChannel(guildId: string, channelId: string): void {
-        const stmt = this.db.prepare(`
+    async setModLogChannel(guildId: string, channelId: string): Promise<void> {
+        await this.db.run(`
             INSERT INTO guild_settings (guild_id, mod_log_channel) 
             VALUES (?, ?)
             ON CONFLICT(guild_id) DO UPDATE SET 
                 mod_log_channel = excluded.mod_log_channel,
                 updated_at = CURRENT_TIMESTAMP
-        `);
-        stmt.run(guildId, channelId);
+        `, guildId, channelId);
     }
 
-    getModLogChannel(guildId: string): string | null {
-        const settings = this.getGuildSettings(guildId);
+    async getModLogChannel(guildId: string): Promise<string | null> {
+        const settings = await this.getGuildSettings(guildId);
         return settings?.mod_log_channel || null;
     }
 

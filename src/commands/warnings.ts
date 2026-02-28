@@ -20,7 +20,7 @@ const command: Command = {
         await interaction.deferReply();
 
         try {
-            const warnings = bot.db.getWarnings(targetUser.id, interaction.guildId!);
+            const warnings = await bot.db.getWarnings(targetUser.id, interaction.guildId!);
 
             if (warnings.length === 0) {
                 const embed = new EmbedBuilder()

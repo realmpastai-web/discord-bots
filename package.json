@@ -1,21 +1,26 @@
 {
-  "name": "shield-moderation-bot",
+  "name": "quantbit-moderation-bot",
   "version": "1.0.0",
-  "description": "Professional Discord moderation bot with auto-mod, logging, and user management",
+  "description": "A professional Discord moderation bot with auto-mod, warnings, timeouts, and logging",
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",
     "dev": "nodemon src/index.js",
-    "test": "jest"
+    "deploy": "node src/deploy-commands.js"
   },
-  "keywords": ["discord", "bot", "moderation", "automod", "discord-js"],
+  "keywords": [
+    "discord",
+    "bot",
+    "moderation",
+    "automod",
+    "discord.js"
+  ],
   "author": "QuantBitRealm",
   "license": "MIT",
   "dependencies": {
     "discord.js": "^14.14.1",
     "dotenv": "^16.3.1",
-    "sqlite3": "^5.1.6",
-    "winston": "^3.11.0"
+    "sqlite3": "^5.1.6"
   },
   "devDependencies": {
     "nodemon": "^3.0.2"

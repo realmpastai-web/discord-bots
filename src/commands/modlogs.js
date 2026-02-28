@@ -1,70 +1,56 @@
-const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
+const EmbedUtil = require('../utils/embeds');
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('modlogs')
-    .setDescription('View recent moderation actions')
+    .setDescription('View moderation history for a user')
     .addUserOption(option =>
-      option
-        .setName('user')
-        .setDescription('Filter by specific user')
-        .setRequired(false)
-    )
+      option.setName('user')
+        .setDescription('The user to check moderation history for')
+        .setRequired(true))
     .addIntegerOption(option =>
-      option
-        .setName('limit')
-        .setDescription('Number of entries (1-25)')
+      option.setName('limit')
+        .setDescription('Number of logs to show (1-25)')
         .setMinValue(1)
         .setMaxValue(25)
-        .setRequired(false)
-    )
+        .setRequired(false))
     .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers),
 
-  async execute(interaction) {
-    const user = interaction.options.getUser('user');
+  async execute(interaction, client) {
+    const target = interaction.options.getUser('user');
     const limit = interaction.options.getInteger('limit') || 10;
 
     try {
-      const logs = await interaction.client.db.getModLogs(interaction.guild.id, user?.id, limit);
-
+      const logs = await client.db.getModLogs(target.id, interaction.guild.id, limit);
+      
       if (logs.length === 0) {
-        return interaction.reply({
-          content: user 
-            ? `✅ No moderation actions found for **${user.tag}**.`
-            : '✅ No moderation actions found in this server.',
+        return interaction.reply({ 
+          embeds: [EmbedUtil.info('No History', `${target.tag} has no moderation history on record.`)]
         });
       }
 
-      const embed = new EmbedBuilder()
-        .setColor(0x5865f2)
-        .setTitle('📋 Moderation Logs')
-        .setDescription(user ? `Actions for ${user.tag}:` : 'Recent server moderation actions:')
-        .setTimestamp();
+      const embed = EmbedUtil.info('Moderation History', `History for ${target.tag}`)
+        .setThumbnail(target.displayAvatarURL({ dynamic: true }));
 
-      logs.forEach((log, index) => {
-        const emoji = {
-          ban: '🔨',
-          kick: '👢',
-          warn: '⚠️',
-          timeout: '🔇',
-          unban: '🔓',
-          purge: '🧹',
-          clearwarn: '✅',
-        }[log.action] || '📝';
+      // Format each log entry
+      const logEntries = logs.map(log => {
+        const timestamp = `<t:${Math.floor(new Date(log.created_at).getTime() / 1000)}:R>`;
+        const duration = log.duration ? ` • Duration: ${log.duration}` : '';
+        return `**${log.action}** • ${timestamp}${duration}\nBy: <@${log.moderator_id}>\nReason: ${log.reason}`;
+      }).join('\n\n');
 
-        embed.addFields({
-          name: `${emoji} ${log.action.toUpperCase()} — ${new Date(log.timestamp).toLocaleString()}`,
-          value: `**Target:** ${log.targetTag} (${log.targetId})\n**By:** ${log.moderatorTag}\n**Reason:** ${log.reason || 'N/A'}`,
-        });
-      });
+      embed.setDescription(logEntries);
+      embed.setFooter({ text: `Showing ${logs.length} most recent action(s)` });
 
       await interaction.reply({ embeds: [embed] });
+
     } catch (error) {
       console.error('Modlogs error:', error);
-      await interaction.reply({
-        content: '❌ Failed to fetch moderation logs.',
-        ephemeral: true,
+      await interaction.reply({ 
+        embeds: [EmbedUtil.error('Error', 'An error occurred while fetching moderation history.')],
+        ephemeral: true 
       });
     }
-  },
+  }
 };

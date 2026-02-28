@@ -1,29 +1,37 @@
-require('dotenv').config();
-const { Client, GatewayIntentBits, Partials, Collection } = require('discord.js');
+const { Client, GatewayIntentBits, Collection } = require('discord.js');
 const fs = require('fs');
 const path = require('path');
-const { logger } = require('./utils/logger');
-const { Database } = require('./services/database');
+const config = require('./config');
+const Database = require('./utils/database');
 
-// Initialize database
-const db = new Database();
+// Validate required config
+if (!config.token) {
+  console.error('❌ ERROR: DISCORD_TOKEN is required! Check your .env file.');
+  process.exit(1);
+}
 
-// Create client with all necessary intents
+if (!config.clientId) {
+  console.error('❌ ERROR: CLIENT_ID is required! Check your .env file.');
+  process.exit(1);
+}
+
+// Create client with necessary intents
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.MessageContent,
     GatewayIntentBits.GuildMembers,
-    GatewayIntentBits.GuildModeration,
-    GatewayIntentBits.GuildBans,
-  ],
-  partials: [Partials.Message, Partials.Channel, Partials.GuildMember],
+    GatewayIntentBits.MessageContent,
+    GatewayIntentBits.GuildModeration
+  ]
 });
 
-// Store commands and data
+// Initialize collections
 client.commands = new Collection();
-client.db = db;
+client.cooldowns = new Collection();
+
+// Initialize database
+client.db = new Database(config.databasePath);
 
 // Load commands
 const commandsPath = path.join(__dirname, 'commands');
@@ -32,11 +40,12 @@ const commandFiles = fs.readdirSync(commandsPath).filter(file => file.endsWith('
 for (const file of commandFiles) {
   const filePath = path.join(commandsPath, file);
   const command = require(filePath);
+  
   if ('data' in command && 'execute' in command) {
     client.commands.set(command.data.name, command);
-    logger.info(`Loaded command: ${command.data.name}`);
+    console.log(`✅ Loaded command: ${command.data.name}`);
   } else {
-    logger.warn(`Command ${file} missing required properties`);
+    console.warn(`⚠️ Command at ${filePath} is missing required "data" or "execute" property.`);
   }
 }
 
@@ -47,28 +56,23 @@ const eventFiles = fs.readdirSync(eventsPath).filter(file => file.endsWith('.js'
 for (const file of eventFiles) {
   const filePath = path.join(eventsPath, file);
   const event = require(filePath);
+  
   if (event.once) {
     client.once(event.name, (...args) => event.execute(...args, client));
   } else {
     client.on(event.name, (...args) => event.execute(...args, client));
   }
-  logger.info(`Loaded event: ${event.name}`);
+  console.log(`✅ Loaded event: ${event.name}`);
 }
 
 // Error handling
-process.on('unhandledRejection', (error) => {
-  logger.error('Unhandled promise rejection:', error);
+process.on('unhandledRejection', error => {
+  console.error('Unhandled promise rejection:', error);
 });
 
-process.on('uncaughtException', (error) => {
-  logger.error('Uncaught exception:', error);
-  process.exit(1);
+process.on('uncaughtException', error => {
+  console.error('Uncaught exception:', error);
 });
 
 // Login
-client.login(process.env.DISCORD_TOKEN).catch(error => {
-  logger.error('Failed to login:', error);
-  process.exit(1);
-});
-
-module.exports = { client };
+client.login(config.token);

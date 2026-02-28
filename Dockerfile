@@ -1,25 +1,30 @@
+# Use Node.js LTS
 FROM node:20-alpine
 
+# Create app directory
 WORKDIR /app
 
-# Install dependencies
+# Copy package files
 COPY package*.json ./
+
+# Install dependencies
 RUN npm ci --only=production
 
-# Create directories
-RUN mkdir -p logs data
-
 # Copy source code
-COPY . .
+COPY src/ ./src/
 
-# Run as non-root user
-RUN addgroup -g 1001 -S nodejs
-RUN adduser -S botuser -u 1001
-RUN chown -R botuser:nodejs /app/logs /app/data
-USER botuser
+# Create data directory for SQLite
+RUN mkdir -p /app/data
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD node -e "require('http').get('http://localhost:3000/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})" || exit 1
+# Set environment
+ENV NODE_ENV=production
 
-CMD ["npm", "start"]
+# Run as non-root user for security
+RUN addgroup -g 1001 -S nodejs && \
+    adduser -S nodejs -u 1001 && \
+    chown -R nodejs:nodejs /app/data
+USER nodejs
+
+# Expose nothing (bot connects outbound only)
+# Start the bot
+CMD ["node", "src/index.js"]

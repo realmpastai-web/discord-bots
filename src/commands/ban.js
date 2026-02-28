@@ -1,79 +1,105 @@
 const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
+const EmbedUtil = require('../utils/embeds');
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('ban')
-    .setDescription('Ban a user from the server')
+    .setDescription('Ban a member from the server')
     .addUserOption(option =>
-      option
-        .setName('user')
+      option.setName('user')
         .setDescription('The user to ban')
-        .setRequired(true)
-    )
+        .setRequired(true))
     .addStringOption(option =>
-      option
-        .setName('reason')
-        .setDescription('Reason for the ban')
-        .setRequired(false)
-    )
+      option.setName('reason')
+        .setDescription('Reason for banning')
+        .setRequired(false))
     .addIntegerOption(option =>
-      option
-        .setName('days')
-        .setDescription('Days of messages to delete (0-7)')
+      option.setName('delete_messages')
+        .setDescription('Delete messages from the last X days (0-7)')
         .setMinValue(0)
         .setMaxValue(7)
-        .setRequired(false)
-    )
+        .setRequired(false))
     .setDefaultMemberPermissions(PermissionFlagsBits.BanMembers),
 
-  async execute(interaction) {
-    const user = interaction.options.getUser('user');
+  async execute(interaction, client) {
+    const target = interaction.options.getMember('user') || interaction.options.getUser('user');
     const reason = interaction.options.getString('reason') || 'No reason provided';
-    const deleteDays = interaction.options.getInteger('days') || 0;
+    const deleteDays = interaction.options.getInteger('delete_messages') || 0;
 
-    // Prevent self-ban
-    if (user.id === interaction.user.id) {
-      return interaction.reply({
-        content: '❌ You cannot ban yourself!',
-        ephemeral: true,
+    if (!target) {
+      return interaction.reply({ 
+        embeds: [EmbedUtil.error('Invalid User', 'Could not find that user.')],
+        ephemeral: true 
       });
     }
 
-    // Prevent banning the bot
-    if (user.id === interaction.client.user.id) {
-      return interaction.reply({
-        content: '❌ You cannot ban me!',
-        ephemeral: true,
-      });
+    // If it's a member object, check permissions
+    if (target.roles) {
+      if (!target.bannable) {
+        return interaction.reply({ 
+          embeds: [EmbedUtil.error('Cannot Ban', 'I cannot ban this user. They may have higher permissions than me.')],
+          ephemeral: true 
+        });
+      }
+
+      if (target.roles.highest.position >= interaction.member.roles.highest.position) {
+        return interaction.reply({ 
+          embeds: [EmbedUtil.error('Permission Denied', 'You cannot ban someone with a higher or equal role.')],
+          ephemeral: true 
+        });
+      }
     }
 
     try {
-      await interaction.guild.members.ban(user, {
+      // DM the user if they're in the server
+      if (target.send) {
+        try {
+          await target.send({
+            embeds: [EmbedUtil.error('You have been banned', `You were banned from **${interaction.guild.name}**\n**Reason:** ${reason}`)]
+          });
+        } catch (err) {
+          // User has DMs disabled
+        }
+      }
+
+      // Ban the user
+      await interaction.guild.members.ban(target.id, { 
         deleteMessageDays: deleteDays,
-        reason: `${reason} | Banned by ${interaction.user.tag}`,
+        reason: `${interaction.user.tag}: ${reason}` 
       });
 
       // Log to database
-      await interaction.client.db.logAction({
-        guildId: interaction.guild.id,
-        action: 'ban',
-        targetId: user.id,
-        targetTag: user.tag,
-        moderatorId: interaction.user.id,
-        moderatorTag: interaction.user.tag,
-        reason: reason,
-        timestamp: new Date().toISOString(),
-      });
+      await client.db.addModLog('BAN', target.id, interaction.guild.id, interaction.user.id, reason);
 
-      await interaction.reply({
-        content: `✅ **${user.tag}** has been banned.\n📋 **Reason:** ${reason}`,
-      });
+      // Send success message
+      const embed = EmbedUtil.success('User Banned', `${target.tag || target.user?.tag} has been banned from the server.`)
+        .addFields(
+          { name: 'User', value: `${target.tag || target.user?.tag} (${target.id})`, inline: true },
+          { name: 'Reason', value: reason, inline: true },
+          { name: 'Moderator', value: interaction.user.tag, inline: true }
+        );
+
+      if (deleteDays > 0) {
+        embed.addFields({ name: 'Message Deletion', value: `Deleted messages from last ${deleteDays} day(s)`, inline: true });
+      }
+
+      await interaction.reply({ embeds: [embed] });
+
+      // Send to mod log channel if configured
+      if (client.config.modLogChannelId) {
+        const logChannel = interaction.guild.channels.cache.get(client.config.modLogChannelId);
+        if (logChannel) {
+          await logChannel.send({ 
+            embeds: [EmbedUtil.modLog('BAN', interaction.user, target.user || target, reason)] 
+          });
+        }
+      }
     } catch (error) {
       console.error('Ban error:', error);
-      await interaction.reply({
-        content: '❌ Failed to ban user. Check my permissions and role hierarchy.',
-        ephemeral: true,
+      await interaction.reply({ 
+        embeds: [EmbedUtil.error('Error', 'An error occurred while trying to ban this user.')],
+        ephemeral: true 
       });
     }
-  },
+  }
 };

@@ -1,74 +1,88 @@
 const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
+const EmbedUtil = require('../utils/embeds');
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('kick')
-    .setDescription('Kick a user from the server')
+    .setDescription('Kick a member from the server')
     .addUserOption(option =>
-      option
-        .setName('user')
+      option.setName('user')
         .setDescription('The user to kick')
-        .setRequired(true)
-    )
+        .setRequired(true))
     .addStringOption(option =>
-      option
-        .setName('reason')
-        .setDescription('Reason for the kick')
-        .setRequired(false)
-    )
+      option.setName('reason')
+        .setDescription('Reason for kicking')
+        .setRequired(false))
     .setDefaultMemberPermissions(PermissionFlagsBits.KickMembers),
 
-  async execute(interaction) {
-    const user = interaction.options.getUser('user');
+  async execute(interaction, client) {
+    const target = interaction.options.getMember('user');
     const reason = interaction.options.getString('reason') || 'No reason provided';
 
-    if (user.id === interaction.user.id) {
-      return interaction.reply({
-        content: '❌ You cannot kick yourself!',
-        ephemeral: true,
+    if (!target) {
+      return interaction.reply({ 
+        embeds: [EmbedUtil.error('Invalid User', 'Could not find that user in this server.')],
+        ephemeral: true 
       });
     }
 
-    if (user.id === interaction.client.user.id) {
-      return interaction.reply({
-        content: '❌ You cannot kick me!',
-        ephemeral: true,
+    // Check if target is kickable
+    if (!target.kickable) {
+      return interaction.reply({ 
+        embeds: [EmbedUtil.error('Cannot Kick', 'I cannot kick this user. They may have higher permissions than me.')],
+        ephemeral: true 
+      });
+    }
+
+    // Check if moderator is trying to kick someone with higher role
+    if (target.roles.highest.position >= interaction.member.roles.highest.position) {
+      return interaction.reply({ 
+        embeds: [EmbedUtil.error('Permission Denied', 'You cannot kick someone with a higher or equal role.')],
+        ephemeral: true 
       });
     }
 
     try {
-      const member = await interaction.guild.members.fetch(user.id);
-      
-      // Check if member is kickable
-      if (!member.kickable) {
-        return interaction.reply({
-          content: '❌ I cannot kick this user. They may have higher permissions.',
-          ephemeral: true,
+      // DM the user
+      try {
+        await target.send({
+          embeds: [EmbedUtil.warning('You have been kicked', `You were kicked from **${interaction.guild.name}**\n**Reason:** ${reason}`)]
         });
+      } catch (err) {
+        // User has DMs disabled
       }
 
-      await member.kick(`${reason} | Kicked by ${interaction.user.tag}`);
+      // Kick the user
+      await target.kick(reason);
 
-      await interaction.client.db.logAction({
-        guildId: interaction.guild.id,
-        action: 'kick',
-        targetId: user.id,
-        targetTag: user.tag,
-        moderatorId: interaction.user.id,
-        moderatorTag: interaction.user.tag,
-        reason: reason,
-        timestamp: new Date().toISOString(),
-      });
+      // Log to database
+      await client.db.addModLog('KICK', target.id, interaction.guild.id, interaction.user.id, reason);
 
-      await interaction.reply({
-        content: `✅ **${user.tag}** has been kicked.\n📋 **Reason:** ${reason}`,
-      });
+      // Send success message
+      const embed = EmbedUtil.success('User Kicked', `${target.user.tag} has been kicked from the server.`)
+        .addFields(
+          { name: 'User', value: `${target.user.tag} (${target.id})`, inline: true },
+          { name: 'Reason', value: reason, inline: true },
+          { name: 'Moderator', value: interaction.user.tag, inline: true }
+        );
+
+      await interaction.reply({ embeds: [embed] });
+
+      // Send to mod log channel if configured
+      if (client.config.modLogChannelId) {
+        const logChannel = interaction.guild.channels.cache.get(client.config.modLogChannelId);
+        if (logChannel) {
+          await logChannel.send({ 
+            embeds: [EmbedUtil.modLog('KICK', interaction.user, target.user, reason)] 
+          });
+        }
+      }
     } catch (error) {
       console.error('Kick error:', error);
-      await interaction.reply({
-        content: '❌ Failed to kick user. Check my permissions.',
-        ephemeral: true,
+      await interaction.reply({ 
+        embeds: [EmbedUtil.error('Error', 'An error occurred while trying to kick this user.')],
+        ephemeral: true 
       });
     }
-  },
+  }
 };

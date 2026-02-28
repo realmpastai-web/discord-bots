@@ -1,5 +1,8 @@
+const { Events } = require('discord.js');
+const EmbedUtil = require('../utils/embeds');
+
 module.exports = {
-  name: 'interactionCreate',
+  name: Events.InteractionCreate,
   async execute(interaction, client) {
     if (!interaction.isChatInputCommand()) return;
 
@@ -10,14 +13,41 @@ module.exports = {
       return;
     }
 
+    // Cooldown handling
+    const { cooldowns } = client;
+    if (!cooldowns.has(command.data.name)) {
+      cooldowns.set(command.data.name, new Map());
+    }
+
+    const now = Date.now();
+    const timestamps = cooldowns.get(command.data.name);
+    const defaultCooldownDuration = 3;
+    const cooldownAmount = (command.cooldown ?? defaultCooldownDuration) * 1000;
+
+    if (timestamps.has(interaction.user.id)) {
+      const expirationTime = timestamps.get(interaction.user.id) + cooldownAmount;
+
+      if (now < expirationTime) {
+        const expiredTimestamp = Math.round(expirationTime / 1000);
+        return interaction.reply({ 
+          content: `⏳ Please wait, you can use \`${command.data.name}\` again <t:${expiredTimestamp}:R>.`,
+          ephemeral: true 
+        });
+      }
+    }
+
+    timestamps.set(interaction.user.id, now);
+    setTimeout(() => timestamps.delete(interaction.user.id), cooldownAmount);
+
+    // Execute command
     try {
-      await command.execute(interaction);
+      await command.execute(interaction, client);
     } catch (error) {
       console.error(`Error executing ${interaction.commandName}:`, error);
       
-      const errorMessage = {
-        content: '❌ There was an error executing this command!',
-        ephemeral: true,
+      const errorMessage = { 
+        embeds: [EmbedUtil.error('Command Error', 'There was an error while executing this command!')],
+        ephemeral: true 
       };
 
       if (interaction.replied || interaction.deferred) {
@@ -26,5 +56,5 @@ module.exports = {
         await interaction.reply(errorMessage);
       }
     }
-  },
+  }
 };

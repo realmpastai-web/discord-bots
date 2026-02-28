@@ -1,22 +1,17 @@
 {
   "name": "quantbit-moderation-bot",
   "version": "1.0.0",
-  "description": "Professional Discord moderation bot with logging, warnings, and auto-mod features",
+  "description": "Professional Discord moderation bot with auto-mod, logging, and warning system",
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",
-    "dev": "node --watch src/index.js",
-    "deploy": "node src/deploy-commands.js"
+    "dev": "node --watch src/index.js"
   },
   "keywords": ["discord", "bot", "moderation", "automod"],
   "author": "QuantBitRealm",
   "license": "MIT",
   "dependencies": {
     "discord.js": "^14.14.1",
-    "dotenv": "^16.3.1",
-    "better-sqlite3": "^9.4.3"
-  },
-  "engines": {
-    "node": ">=18.0.0"
+    "dotenv": "^16.3.1"
   }
 }

@@ -3,7 +3,7 @@ version: '3.8'
 services:
   moderation-bot:
     build: .
-    container_name: quantbit-moderation-bot
+    container_name: quantmod-bot
     restart: unless-stopped
     env_file:
       - .env
@@ -11,8 +11,4 @@ services:
       - ./data:/app/data
     environment:
       - NODE_ENV=production
-    # No ports needed - bot connects to Discord gateway
-
-volumes:
-  data:
-    driver: local
+      - DATABASE_PATH=/app/data/moderation.db

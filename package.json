@@ -1,29 +1,31 @@
 {
-  "name": "quantbit-moderation-bot",
+  "name": "quant-moderation-bot",
   "version": "1.0.0",
-  "description": "A professional Discord moderation bot with auto-mod, warnings, timeouts, and logging",
-  "main": "src/index.js",
+  "description": "Professional Discord moderation bot with warnings, auto-mod, and logging",
+  "main": "dist/index.js",
   "scripts": {
-    "start": "node src/index.js",
-    "dev": "nodemon src/index.js",
-    "deploy": "node src/deploy-commands.js"
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "ts-node src/index.ts",
+    "lint": "eslint src/**/*.ts"
   },
-  "keywords": [
-    "discord",
-    "bot",
-    "moderation",
-    "automod",
-    "discord.js"
-  ],
+  "keywords": ["discord", "bot", "moderation", "automod"],
   "author": "QuantBitRealm",
   "license": "MIT",
   "dependencies": {
     "discord.js": "^14.14.1",
-    "dotenv": "^16.3.1",
-    "sqlite3": "^5.1.6"
+    "sqlite3": "^5.1.6",
+    "better-sqlite3": "^9.4.3",
+    "dotenv": "^16.4.5"
   },
   "devDependencies": {
-    "nodemon": "^3.0.2"
+    "@types/node": "^20.11.24",
+    "@types/better-sqlite3": "^7.6.9",
+    "typescript": "^5.3.3",
+    "ts-node": "^10.9.2",
+    "eslint": "^8.57.0",
+    "@typescript-eslint/eslint-plugin": "^7.1.0",
+    "@typescript-eslint/parser": "^7.1.0"
   },
   "engines": {
     "node": ">=18.0.0"

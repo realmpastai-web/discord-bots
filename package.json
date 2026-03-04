@@ -1,0 +1,32 @@
+{
+  "name": "ticket-support-bot",
+  "version": "1.0.0",
+  "description": "Professional Discord ticket support system with categories, transcripts, and team assignment",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "deploy": "node src/deploy-commands.js",
+    "dev": "nodemon src/index.js"
+  },
+  "keywords": [
+    "discord",
+    "bot",
+    "tickets",
+    "support",
+    "moderation"
+  ],
+  "author": "QuantBitRealm Studios",
+  "license": "MIT",
+  "dependencies": {
+    "discord.js": "^14.14.1",
+    "dotenv": "^16.3.1",
+    "better-sqlite3": "^9.4.3",
+    "winston": "^3.11.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.3"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

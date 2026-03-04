@@ -2,6 +2,7 @@ require('dotenv').config();
 const { Client, GatewayIntentBits, Collection } = require('discord.js');
 const fs = require('fs');
 const path = require('path');
+const http = require('http');
 const { logger } = require('./utils/logger');
 const { initializeDatabase, closeDatabase } = require('./database/connection');
 
@@ -92,3 +93,29 @@ client.login(process.env.DISCORD_TOKEN)
     logger.error('Failed to login:', error);
     process.exit(1);
   });
+
+// Health check server for Railway/Uptime monitoring
+const PORT = process.env.PORT || 3000;
+const server = http.createServer((req, res) => {
+  if (req.url === '/health') {
+    const health = {
+      status: 'ok',
+      uptime: process.uptime(),
+      timestamp: new Date().toISOString(),
+      bot: client.user ? {
+        username: client.user.username,
+        id: client.user.id,
+        status: client.ws.status === 0 ? 'connected' : 'disconnected'
+      } : 'initializing'
+    };
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify(health, null, 2));
+  } else {
+    res.writeHead(404);
+    res.end('Not Found');
+  }
+});
+
+server.listen(PORT, () => {
+  logger.info(`Health check server running on port ${PORT}`);
+});

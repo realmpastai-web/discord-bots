@@ -1,0 +1,13 @@
+version: '3.8'
+
+services:
+  server-stats-bot:
+    build: .
+    container_name: server-stats-pro
+    restart: always
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./temp:/app/temp

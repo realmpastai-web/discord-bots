@@ -1,0 +1,33 @@
+{
+  "name": "realestate-lead-bot",
+  "version": "1.0.0",
+  "description": "Real Estate Lead Management Bot for Discord - Track leads, schedule follow-ups, and manage your sales pipeline",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "deploy": "node src/deploy-commands.js",
+    "dev": "nodemon src/index.js"
+  },
+  "keywords": [
+    "discord-bot",
+    "real-estate",
+    "lead-management",
+    "crm",
+    "wholesaling"
+  ],
+  "author": "QuantBitRealm",
+  "license": "MIT",
+  "dependencies": {
+    "better-sqlite3": "^9.4.3",
+    "discord.js": "^14.14.1",
+    "dotenv": "^16.4.5",
+    "node-cron": "^3.0.3",
+    "winston": "^3.12.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "name": "giveaway-pro-bot",
+  "version": "1.0.0",
+  "description": "Professional Discord giveaway bot with requirements, verification, and analytics",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "deploy": "node src/deploy-commands.js",
+    "dev": "nodemon src/index.js"
+  },
+  "keywords": ["discord", "bot", "giveaway", "contest", "raffle"],
+  "author": "QuantBitRealm",
+  "license": "MIT",
+  "dependencies": {
+    "discord.js": "^14.14.1",
+    "better-sqlite3": "^9.4.3",
+    "dotenv": "^16.4.5",
+    "winston": "^3.12.0",
+    "ms": "^2.1.3"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
